@@ -40,6 +40,7 @@ namespace FirstScraping
         }
         static bool isLoggedIn = false;
         static bool isScrapped = false;
+        static bool isScrappedCar = false;
         private static void BrowserLoadingStateChanged(object sender, LoadingStateChangedEventArgs e)
         {
             if (!e.IsLoading)
@@ -60,14 +61,15 @@ namespace FirstScraping
                         Console.WriteLine("User Logged in.n");
                     });
                 }
-                else if(!isScrapped)
+                else if (!isScrapped)
                 {
-                   scrapSearchResults();
-                    Thread.Sleep(2000);
-                    open2ndSearchPage();
-                    Thread.Sleep(2000);
                     scrapSearchResults();
                     isScrapped = true;
+                }
+                else if (!isScrappedCar)
+                {
+                    scrapCarDetails();
+                    isScrappedCar = true;
                 }
             }
         }
@@ -75,19 +77,31 @@ namespace FirstScraping
         public static void scrapSearchResults()
         {
             // push all search results into an array
-            var pageQueryScript = @"
-                    (function(){
-                        var lis =  document.querySelectorAll('[data-linkname=vehicle-listing]');
-                        var result = [];
+            var pageQueryScript = @"(function(){
+  var result = [];
+function scrapeSearch(){                      
+var lis =  document.querySelectorAll('[data-linkname=vehicle-listing]');
                         for(var i=0; i < lis.length; i++) { result.push(lis[i].innerText +' || '+ lis[i].nextElementSibling.innerText +' || '+ lis[i].nextElementSibling.nextElementSibling.innerText ) } 
-                        return result; 
-                    })()";
+}
+//scrape first
+scrapeSearch()
+//open second page
+document.querySelectorAll(`[aria-label='Go to Page 2']`)[0].click();
+//wait 2nd page
+setTimeout(()=>{
+scrapeSearch()
+//alert(result)
+return result;
+
+},2000) 
+})()";
             var scriptTask = chromeBrowser.EvaluateScriptAsync(pageQueryScript);
             scriptTask.ContinueWith(u =>
             {
+               MessageBox.Show(u.Result.Success.ToString(), "first");
                 if (u.Result.Success && u.Result.Result != null)
                 {
-                    Console.WriteLine("Bot output received!nn");
+                    Console.WriteLine("Bot output received! \n\n");
                     var filePath = "output.txt";
                     var response = (List<dynamic>)u.Result.Result;
                     foreach (string v in response)
@@ -95,19 +109,45 @@ namespace FirstScraping
                         Console.WriteLine(v);
                     }
                     File.AppendAllLines(filePath, response.Select(v => (string)v).ToArray());
-                    Console.WriteLine($"nnBot output saved to {filePath}");
-                    Thread.Sleep(4000);
+                    Console.WriteLine($"\n\n Bot output saved to {filePath}");
+                    // MessageBox.Show(filePath, "scraping complete");
+                    //open random car
+                   // chromeBrowser.EvaluateScriptAsync("document.querySelectorAll('[data-linkname=vehicle-listing]')[7].click();");
+
                 }
             });
         }
-        public static void open2ndSearchPage()
+        public static void scrapCarDetails()
         {
-            var pageQueryScript = @"
-                    (function(){
-                 document.querySelectorAll(`[aria-label='Go to Page 2']`)[0].click();
+            // push all search results into an array
+            var pageQueryScript = @" (function(){
+                        var lis =  document.querySelectorAll(`[class='fancy-description-list']`);
+                        var result = [];
+                        result.push(lis[0].innerText);
+                        result.push(lis[1].innerText);
+                        return result; 
                     })()";
             var scriptTask = chromeBrowser.EvaluateScriptAsync(pageQueryScript);
+            scriptTask.ContinueWith(u =>
+            {
+               // MessageBox.Show(u.Result.Success.ToString(), "hello");
+                if (u.Result.Success && u.Result.Result != null)
+                {
+                    Console.WriteLine("Bot output received!nn");
+                    var filePath = "zzzCarOutput.txt";
+                    var response = (List<dynamic>)u.Result.Result;
+                    foreach (string v in response)
+                    {
+                        Console.WriteLine(v);
+                    }
+                    File.AppendAllLines(filePath, response.Select(v => (string)v).ToArray());
+                    Console.WriteLine($"nnBot output saved to {filePath}");
+                  //  MessageBox.Show(filePath, "scraping complete");
+                }
+            });
         }
+
+
         public Form1()
         {
             InitializeComponent();
