@@ -78,45 +78,68 @@ namespace FirstScraping
         {
             // push all search results into an array
             var pageQueryScript = @"(function(){
-  var result = [];
-function scrapeSearch(){                      
+async function waitall(){
+var result = [];
+async function scrapeSearch(){                      
 var lis =  document.querySelectorAll('[data-linkname=vehicle-listing]');
                         for(var i=0; i < lis.length; i++) { result.push(lis[i].innerText +' || '+ lis[i].nextElementSibling.innerText +' || '+ lis[i].nextElementSibling.nextElementSibling.innerText ) } 
+
+console.log('return scraping '+ result.length+'\n\n')
 }
 //scrape first
+console.log('starting scraping 1st\n\n')
+function timeout(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+  await timeout(3000);
 scrapeSearch()
+return result;
+
 //open second page
 document.querySelectorAll(`[aria-label='Go to Page 2']`)[0].click();
 //wait 2nd page
-setTimeout(()=>{
+  await timeout(3000);
+
+console.log('starting scraping 2nd page\n\n')
 scrapeSearch()
 //alert(result)
+console.log('return scraping \n\n'+ result)
 return result;
+}
 
-},2000) 
+
+return waitall();
 })()";
-            var scriptTask = chromeBrowser.EvaluateScriptAsync(pageQueryScript);
-            scriptTask.ContinueWith(u =>
+            // Get us off the main thread
+            Task task = new Task(async () =>
             {
-               MessageBox.Show(u.Result.Success.ToString(), "first");
-                if (u.Result.Success && u.Result.Result != null)
+                JavascriptResponse u = await chromeBrowser.EvaluateScriptAsPromiseAsync(pageQueryScript);
+                Thread.Sleep(15000);
+                // MessageBox.Show(u.Result.Success.ToString(), "first");
+                Console.WriteLine(u.Result!=null);
+                    Console.WriteLine(u.Result);
+                Console.WriteLine("Bot output received! before check \n\n");
+                if ( u.Result != null)
                 {
                     Console.WriteLine("Bot output received! \n\n");
                     var filePath = "output.txt";
-                    var response = (List<dynamic>)u.Result.Result;
+                    var response = (List<dynamic>)u.Result;
                     foreach (string v in response)
                     {
                         Console.WriteLine(v);
                     }
                     File.AppendAllLines(filePath, response.Select(v => (string)v).ToArray());
                     Console.WriteLine($"\n\n Bot output saved to {filePath}");
-                    // MessageBox.Show(filePath, "scraping complete");
-                    //open random car
-                   // chromeBrowser.EvaluateScriptAsync("document.querySelectorAll('[data-linkname=vehicle-listing]')[7].click();");
-
-                }
+                // MessageBox.Show(filePath, "scraping complete");
+                //open random car
+                // chromeBrowser.EvaluateScriptAsync("document.querySelectorAll('[data-linkname=vehicle-listing]')[7].click();");
+     
+        } 
             });
-        }
+            task.Start();
+
+    }
         public static void scrapCarDetails()
         {
             // push all search results into an array
