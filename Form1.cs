@@ -16,13 +16,24 @@ using System.Threading;
 
 namespace FirstScraping
 {
+    public class BoundObject
+    {
+        public void showMessage(string msg)
+        {
+            MessageBox.Show(msg);
+        }
+        public void sleep(int time)
+        {
+            Thread.Sleep(time);
+        }
+    }
+
     public partial class Form1 : Form
     {
         public static ChromiumWebBrowser chromeBrowser;
 
         public void InitializeChromium()
         {
-
             CefSettings settings = new CefSettings();
             // Initialize cef with the provided settings
             Cef.Initialize(settings);
@@ -32,6 +43,8 @@ namespace FirstScraping
             initialUrl = "https://www.cars.com/shopping/results/?list_price_max=100000&makes%5B%5D=tesla&maximum_distance=all&models%5B%5D=tesla-model_s&stock_type=used&zip=94596";
 
             chromeBrowser = new ChromiumWebBrowser(initialUrl);
+            chromeBrowser.JavascriptObjectRepository.Register("boundAsync", new BoundObject(), true);
+
             chromeBrowser.LoadingStateChanged += BrowserLoadingStateChanged;
 
             // Add it to the form and fill it to the form window.
@@ -48,6 +61,13 @@ namespace FirstScraping
                 //MessageBox.Show(isLoggedIn.ToString(), "hello" );
                 //remove after test
                 isLoggedIn = true;
+
+                var teststr = @"    (async function() {
+        await CefSharp.BindObjectAsync('boundAsync', 'bound');
+                boundAsync.sleep(10000);
+
+            })(); ";
+              chromeBrowser.EvaluateScriptAsync(teststr);
 
                 if (!isLoggedIn)
                 {
@@ -78,7 +98,6 @@ namespace FirstScraping
         {
             // push all search results into an array
             var pageQueryScript = @"(function(){
-async function waitall(){
 var result = [];
 async function scrapeSearch(){                      
 var lis =  document.querySelectorAll('[data-linkname=vehicle-listing]');
@@ -88,45 +107,37 @@ console.log('return scraping '+ result.length+'\n\n')
 }
 //scrape first
 console.log('starting scraping 1st\n\n')
-function timeout(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
 
-  await timeout(3000);
 scrapeSearch()
 return result;
 
 //open second page
 document.querySelectorAll(`[aria-label='Go to Page 2']`)[0].click();
 //wait 2nd page
-  await timeout(3000);
+  //await timeout(3000);
 
 console.log('starting scraping 2nd page\n\n')
 scrapeSearch()
 //alert(result)
 console.log('return scraping \n\n'+ result)
 return result;
-}
 
-
-return waitall();
 })()";
             // Get us off the main thread
             Task task = new Task(async () =>
             {
-                JavascriptResponse u = await chromeBrowser.EvaluateScriptAsPromiseAsync(pageQueryScript);
-                Thread.Sleep(15000);
+                JavascriptResponse u = await chromeBrowser.EvaluateScriptAsync(pageQueryScript);
+                //Thread.Sleep(15000);
                 // MessageBox.Show(u.Result.Success.ToString(), "first");
                 Console.WriteLine(u.Result!=null);
-                    Console.WriteLine(u.Result);
+                Console.WriteLine(u.Result);
                 Console.WriteLine("Bot output received! before check \n\n");
                 if ( u.Result != null)
                 {
                     Console.WriteLine("Bot output received! \n\n");
                     var filePath = "output.txt";
                     var response = (List<dynamic>)u.Result;
-                    foreach (string v in response)
-                    {
+                    foreach (string v in response) {
                         Console.WriteLine(v);
                     }
                     File.AppendAllLines(filePath, response.Select(v => (string)v).ToArray());
