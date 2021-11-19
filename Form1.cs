@@ -39,7 +39,7 @@ namespace FirstScraping
             // Create a browser component
             string initialUrl = "https://www.cars.com/signin/?redirect_path=%2Fshopping%2Fresults%2F%3Flist_price_max%3D100000%26makes%255B%255D%3Dtesla%26maximum_distance%3Dall%26models%255B%255D%3Dtesla-model_s%26stock_type%3Dused%26zip%3D94596";
             //remove after test
-            initialUrl = "https://www.cars.com/shopping/results/?list_price_max=100000&makes%5B%5D=tesla&maximum_distance=all&models%5B%5D=tesla-model_s&stock_type=used&zip=94596";
+            //initialUrl = "https://www.cars.com/shopping/results/?list_price_max=100000&makes%5B%5D=tesla&maximum_distance=all&models%5B%5D=tesla-model_s&stock_type=used&zip=94596";
 
             chromeBrowser = new ChromiumWebBrowser(initialUrl);
             chromeBrowser.JavascriptObjectRepository.Register("boundAsync", new BoundObject(), true);
@@ -57,13 +57,10 @@ namespace FirstScraping
         {
             if (!e.IsLoading)
             {
-                //MessageBox.Show(isLoggedIn.ToString(), "hello" );
-                //remove after test
-                isLoggedIn = true;
 
                 if (!isLoggedIn)
                 {
-                    // fill the username and password fields with their respective values, then click the submit button
+                    // fill the username and password fields, then click the submit button
                     var loginScript = @"document.querySelector('#email').value = 'johngerson808@gmail.com';
                                document.querySelector('#password').value = 'test8008';
                                document.querySelector('button[type=submit]').click();";
@@ -74,7 +71,7 @@ namespace FirstScraping
                         Console.WriteLine("User Logged in.n");
                     });
                 }
-                else if (!isScrapped && scrapingLoopCount<=2 )
+                else if (!isScrapped && scrapingLoopCount<2 )
                 {
                     startScraping();
                 }
