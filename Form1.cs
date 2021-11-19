@@ -16,22 +16,21 @@ using System.Threading;
 
 namespace FirstScraping
 {
-    public class BoundObject
-    {
-        public void showMessage(string msg)
-        {
-            MessageBox.Show(msg);
-        }
-        public void sleep(int time)
-        {
-            Thread.Sleep(time);
-        }
-    }
+
 
     public partial class Form1 : Form
     {
         public static ChromiumWebBrowser chromeBrowser;
+        public static string[] searchRes = new[] { "" };
+        public static bool sleep(int time)
+        {
+            var teststr = @"    ( function() {
+        await CefSharp.BindObjectAsync('boundAsync', 'bound');
+                boundAsync.sleep(" + time + "); })(); ";
 
+            chromeBrowser.EvaluateScriptAsync(teststr);
+            return true;
+        }
         public void InitializeChromium()
         {
             CefSettings settings = new CefSettings();
@@ -53,7 +52,7 @@ namespace FirstScraping
         }
         static bool isLoggedIn = false;
         static bool isScrapped = false;
-        static bool isScrappedCar = false;
+        static int scrapingLoopCount=0 ;
         private static void BrowserLoadingStateChanged(object sender, LoadingStateChangedEventArgs e)
         {
             if (!e.IsLoading)
@@ -62,13 +61,6 @@ namespace FirstScraping
                 //remove after test
                 isLoggedIn = true;
 
-                var teststr = @"    (async function() {
-        await CefSharp.BindObjectAsync('boundAsync', 'bound');
-                boundAsync.sleep(10000);
-
-            })(); ";
-              chromeBrowser.EvaluateScriptAsync(teststr);
-
                 if (!isLoggedIn)
                 {
                     // fill the username and password fields with their respective values, then click the submit button
@@ -76,83 +68,110 @@ namespace FirstScraping
                                document.querySelector('#password').value = 'test8008';
                                document.querySelector('button[type=submit]').click();";
 
-                    chromeBrowser.EvaluateScriptAsync(loginScript).ContinueWith(u => {
+                    chromeBrowser.EvaluateScriptAsync(loginScript).ContinueWith(u =>
+                    {
                         isLoggedIn = true;
                         Console.WriteLine("User Logged in.n");
                     });
                 }
-                else if (!isScrapped)
+                else if (!isScrapped && scrapingLoopCount<=2 )
                 {
-                    scrapSearchResults();
-                    isScrapped = true;
-                }
-                else if (!isScrappedCar)
-                {
-                    scrapCarDetails();
-                    isScrappedCar = true;
+                    startScraping();
                 }
             }
         }
+        public static void startScraping()
+        {
+            // Get us off the main thread
+            Task task = new Task(() =>
+            {
+                scrapingLoopCount++;
+                scrapSearchResults();
+            });
+            task.Start();
+        }
+        public static void openSecondSearchPage()
+        {
+            if (scrapingLoopCount > 2) return;
+            // push all search results into an array
+            var pageQueryScript = @"(function(){
+//open second page
+document.querySelectorAll(`[aria-label='Go to Page 2']`)[0].click();
+//wait 2nd page
+})()";
+             chromeBrowser.EvaluateScriptAsync(pageQueryScript);
+        }
 
-        public static void scrapSearchResults()
+        private static async void scrapSearchResults()
         {
             // push all search results into an array
             var pageQueryScript = @"(function(){
 var result = [];
-async function scrapeSearch(){                      
+ function scrapeSearch(){                      
 var lis =  document.querySelectorAll('[data-linkname=vehicle-listing]');
                         for(var i=0; i < lis.length; i++) { result.push(lis[i].innerText +' || '+ lis[i].nextElementSibling.innerText +' || '+ lis[i].nextElementSibling.nextElementSibling.innerText ) } 
 
 console.log('return scraping '+ result.length+'\n\n')
 }
-//scrape first
-console.log('starting scraping 1st\n\n')
+//scrape page
+console.log('starting scraping search page\n\n')
 
 scrapeSearch()
-return result;
-
-//open second page
-document.querySelectorAll(`[aria-label='Go to Page 2']`)[0].click();
-//wait 2nd page
-  //await timeout(3000);
-
-console.log('starting scraping 2nd page\n\n')
-scrapeSearch()
-//alert(result)
-console.log('return scraping \n\n'+ result)
 return result;
 
 })()";
-            // Get us off the main thread
-            Task task = new Task(async () =>
-            {
-                JavascriptResponse u = await chromeBrowser.EvaluateScriptAsync(pageQueryScript);
-                //Thread.Sleep(15000);
-                // MessageBox.Show(u.Result.Success.ToString(), "first");
-                Console.WriteLine(u.Result!=null);
-                Console.WriteLine(u.Result);
-                Console.WriteLine("Bot output received! before check \n\n");
-                if ( u.Result != null)
-                {
-                    Console.WriteLine("Bot output received! \n\n");
-                    var filePath = "output.txt";
-                    var response = (List<dynamic>)u.Result;
-                    foreach (string v in response) {
-                        Console.WriteLine(v);
-                    }
-                    File.AppendAllLines(filePath, response.Select(v => (string)v).ToArray());
-                    Console.WriteLine($"\n\n Bot output saved to {filePath}");
-                // MessageBox.Show(filePath, "scraping complete");
-                //open random car
-                // chromeBrowser.EvaluateScriptAsync("document.querySelectorAll('[data-linkname=vehicle-listing]')[7].click();");
-     
-        } 
-            });
-            task.Start();
 
-    }
-        public static void scrapCarDetails()
+            JavascriptResponse u = await chromeBrowser.EvaluateScriptAsync(pageQueryScript);
+            Console.WriteLine("Bot output received! before check \n\n");
+            if (u.Result != null)
+            {
+                Console.WriteLine("\n\n Bot output received! \n\n", scrapingLoopCount);
+                var response = (List<dynamic>)u.Result;
+                foreach (string v in response)
+                {
+                    Console.WriteLine(v);
+                    searchRes = searchRes.Concat(new[] { v }).ToArray();
+                }
+                Console.WriteLine($"\n\n Bot output saved to array");
+
+                if (!isScrapped||(isScrapped && scrapingLoopCount>1) )
+                {
+                    openSecondSearchPage();
+                    Console.WriteLine("\n\n Opening 2nd page");
+                    isScrapped = true;
+                    Thread.Sleep(10000);
+                    Console.WriteLine($"\n\n Bot Scraping 2nd page");
+                    scrapSearchResults();
+                    Console.WriteLine("\n\n Done 2nd page");
+                    Thread.Sleep(5000);
+                    if (scrapingLoopCount > 1)
+                    {
+                        saveSearchArray();
+                        //open random car
+                        await chromeBrowser.EvaluateScriptAsync("document.querySelectorAll('[data-linkname=vehicle-listing]')[7].click();");
+                        Thread.Sleep(10000);
+                        scrapCarDetails();
+                        //Thread.Sleep(1000);
+                        //go back
+                        // await chromeBrowser.EvaluateScriptAsync("history.back(); ");
+                        //Thread.Sleep(10000);
+                    }
+                    else
+                    {
+                        //select model X
+                        await chromeBrowser.EvaluateScriptAsync("document.querySelector('#model_tesla-model_x').click(); document.querySelector('#model_tesla-model_s').click(); ");
+                        Thread.Sleep(10000);
+                        startScraping();
+                    }
+
+                }
+            }
+        }
+        static bool scrapedCarDetails = false;
+        private static void scrapCarDetails()
         {
+            if (scrapedCarDetails) return;
+            scrapedCarDetails = true;
             // push all search results into an array
             var pageQueryScript = @" (function(){
                         var lis =  document.querySelectorAll(`[class='fancy-description-list']`);
@@ -164,10 +183,10 @@ return result;
             var scriptTask = chromeBrowser.EvaluateScriptAsync(pageQueryScript);
             scriptTask.ContinueWith(u =>
             {
-               // MessageBox.Show(u.Result.Success.ToString(), "hello");
+                // MessageBox.Show(u.Result.Success.ToString(), "hello");
                 if (u.Result.Success && u.Result.Result != null)
                 {
-                    Console.WriteLine("Bot output received!nn");
+                    Console.WriteLine("Bot Car details output received! \n\n");
                     var filePath = "zzzCarOutput.txt";
                     var response = (List<dynamic>)u.Result.Result;
                     foreach (string v in response)
@@ -175,8 +194,8 @@ return result;
                         Console.WriteLine(v);
                     }
                     File.AppendAllLines(filePath, response.Select(v => (string)v).ToArray());
-                    Console.WriteLine($"nnBot output saved to {filePath}");
-                  //  MessageBox.Show(filePath, "scraping complete");
+                    Console.WriteLine($"\n\nBot output saved to {filePath}");
+                    //  MessageBox.Show(filePath, "scraping complete");
                 }
             });
         }
@@ -190,9 +209,19 @@ return result;
         }
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
+            Console.WriteLine("\n\nClosing app \n\n ");
+            saveSearchArray();
             Cef.Shutdown();
         }
+        public static bool alreadySaved = false;
+        public static void saveSearchArray()
+        {
+            Console.WriteLine("\n\nsaveSearchArray() \n\n ");
 
+            var filePath = "output.txt";
+           if(!alreadySaved) File.AppendAllLines(filePath, searchRes);
+            alreadySaved = true;
+        }
         private void Form1_Load(object sender, EventArgs e)
         {
 
